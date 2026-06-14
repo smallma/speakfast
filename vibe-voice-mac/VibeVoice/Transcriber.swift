@@ -6,15 +6,15 @@ import WhisperKit
 //
 // 隱私：辨識全程在本地，唯一的網路行為是「首次下載模型」。
 // 本檔刻意「不把辨識出來的文字寫進 log」——避免敏感口述內容落到系統日誌。
+//
+// 並行安全：WhisperKit 對同一實例不可重入。串流預覽與定稿（甚至跨兩次錄音）
+// 都可能搶著呼叫 transcribe，因此用一條「任務鏈」把每次辨識排隊，保證永不重疊。
+// 整個類別標 @MainActor：tail 只在主執行緒被改，沒有資料競爭；重運算仍在
+// WhisperKit 內部的背景執行緒跑（我們只是 await）。
+@MainActor
 final class Transcriber {
     private var pipe: WhisperKit?
-
-    // Whisper 對靜音 / 極短音常吐出的「幻覺」字句；短音時若整段等於這些就丟掉。
-    private static let hallucinations: Set<String> = [
-        "謝謝", "謝謝大家", "謝謝觀看", "請不吝點贊", "請訂閱", "字幕由", "下次再見",
-        "thank you", "thanks for watching", "thank you for watching", "you", "bye",
-        "please subscribe", "字幕志愿者",
-    ]
+    private var tail: Task<String, Never> = Task { "" }
 
     func load() async {
         do {
@@ -26,33 +26,31 @@ final class Transcriber {
         }
     }
 
-    // duration：這次錄音長度（秒），用來判斷是否該套用幻覺過濾。
-    func transcribe(fileURL: URL, durationSec: Double) async -> String {
-        defer { try? FileManager.default.removeItem(at: fileURL) } // 保證刪掉暫存錄音
-        guard let pipe else { return "" }
-        do {
-            // 熱詞注入：把術語清單用 tokenizer 編成 promptTokens（濾掉特殊 token），
-            // 當成解碼前置上下文，提升 useEffect / pnpm 這類技術詞的辨識。
-            var promptTokens: [Int] = []
-            if let tokenizer = pipe.tokenizer {
-                let begin = tokenizer.specialTokens.specialTokenBegin
-                promptTokens = tokenizer.encode(text: " " + Vocabulary.promptText())
-                    .filter { $0 < begin }
-            }
+    var isReady: Bool { pipe != nil }
 
-            let options = DecodingOptions(
-                task: .transcribe,
-                language: nil,            // 自動偵測，中英混雜可用
-                temperature: 0.0,
-                usePrefillPrompt: true,
-                promptTokens: promptTokens.isEmpty ? nil : promptTokens
-            )
-            let results = try await pipe.transcribe(audioPath: fileURL.path, decodeOptions: options)
+    // 串流／定稿共用。每次呼叫都排在前一次之後，序列化執行。
+    // - filterHallucinations：定稿時才開（短音 + 已知幻覺 → 丟掉）；串流預覽時關，避免閃爍。
+    func transcribe(samples: [Float], durationSec: Double, filterHallucinations: Bool) async -> String {
+        let previous = tail
+        let job = Task { @MainActor [weak self] () -> String in
+            _ = await previous.value   // 等前一次辨識做完，保證不重疊
+            guard let self else { return "" }
+            return await self.run(samples: samples, durationSec: durationSec,
+                                  filterHallucinations: filterHallucinations)
+        }
+        tail = job
+        return await job.value
+    }
+
+    private func run(samples: [Float], durationSec: Double, filterHallucinations: Bool) async -> String {
+        guard let pipe, !samples.isEmpty else { return "" }
+        do {
+            let options = buildOptions(pipe: pipe)
+            let results = try await pipe.transcribe(audioArray: samples, decodeOptions: options)
             let text = results.map { $0.text }.joined()
                 .trimmingCharacters(in: .whitespacesAndNewlines)
 
-            // 幻覺過濾：很短的錄音 + 輸出剛好是已知幻覺字句 → 視為雜訊丟掉
-            if durationSec < 1.5 {
+            if filterHallucinations, durationSec < 1.5 {
                 let norm = text.lowercased().trimmingCharacters(in: .punctuationCharacters)
                 if Self.hallucinations.contains(norm) { return "" }
             }
@@ -62,4 +60,29 @@ final class Transcriber {
             return ""
         }
     }
+
+    // 熱詞注入：把術語清單用 tokenizer 編成 promptTokens（濾掉特殊 token），
+    // 當成解碼前置上下文，提升 useEffect / pnpm 這類技術詞的辨識。
+    private func buildOptions(pipe: WhisperKit) -> DecodingOptions {
+        var promptTokens: [Int] = []
+        if let tokenizer = pipe.tokenizer {
+            let begin = tokenizer.specialTokens.specialTokenBegin
+            promptTokens = tokenizer.encode(text: " " + Vocabulary.promptText())
+                .filter { $0 < begin }
+        }
+        return DecodingOptions(
+            task: .transcribe,
+            language: nil,            // 自動偵測，中英混雜可用
+            temperature: 0.0,
+            usePrefillPrompt: true,
+            promptTokens: promptTokens.isEmpty ? nil : promptTokens
+        )
+    }
+
+    // Whisper 對靜音 / 極短音常吐出的「幻覺」字句；短音時若整段等於這些就丟掉。
+    private static let hallucinations: Set<String> = [
+        "謝謝", "謝謝大家", "謝謝觀看", "請不吝點贊", "請訂閱", "字幕由", "下次再見",
+        "thank you", "thanks for watching", "thank you for watching", "you", "bye",
+        "please subscribe", "字幕志愿者",
+    ]
 }
