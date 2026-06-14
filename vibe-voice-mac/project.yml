@@ -1,0 +1,31 @@
+name: VibeVoice
+options:
+  bundleIdPrefix: com.vibevoice
+  deploymentTarget:
+    macOS: "13.0"
+packages:
+  WhisperKit:
+    url: https://github.com/argmaxinc/WhisperKit
+    branch: main
+targets:
+  VibeVoice:
+    type: application
+    platform: macOS
+    deploymentTarget: "13.0"
+    sources:
+      - VibeVoice
+    dependencies:
+      - package: WhisperKit
+    info:
+      path: Info.plist
+      properties:
+        LSUIElement: true
+        NSMicrophoneUsageDescription: "需要麥克風來做語音輸入"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vibevoice.app
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "YES"
