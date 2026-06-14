@@ -1,3 +1,4 @@
+import Foundation
 import AVFoundation
 
 // 用 AVAudioRecorder 直接錄成 16kHz / mono / 16-bit PCM WAV，

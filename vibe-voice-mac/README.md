@@ -53,8 +53,12 @@
 4. **Info.plist / 權限說明字串**（Target → Info）：
    - `NSMicrophoneUsageDescription` = `需要麥克風來做語音輸入`
    - `Application is agent (UIElement)` (`LSUIElement`) = `YES` → 純 menu bar、不進 Dock。
-5. **Signing & Capabilities**：開發階段**先關掉 App Sandbox**
-   （Sandbox 會擋 CGEvent 全域監聽/送鍵，熱鍵與直接鍵入會失效）。
+5. **建置設定（一次到位，務必照做）**：
+   - **macOS Deployment Target ≥ 13.0**（`MenuBarExtra` 需要 macOS 13）。
+   - **Swift Language Version = Swift 5**（Xcode 新專案的預設值；別切到 Swift 6 語言模式，
+     否則嚴格並行檢查會把跨 actor 的非 Sendable 物件報成錯）。
+   - **Signing & Capabilities → 開發階段先關掉 App Sandbox**
+     （Sandbox 會擋 CGEvent 全域監聽/送鍵，熱鍵與直接鍵入會失效）。
 6. **Build & Run** → 允許麥克風 → 等選單顯示「模型已就緒」（首次下載 large-v3-turbo，約幾百 MB）。
 7. **手動授權**（System Settings → Privacy & Security）：
    - **Input Monitoring**：勾 VibeVoice（收得到全域右 Cmd / Esc）。
@@ -65,6 +69,15 @@
 
 對著任何輸入框（終端機的 Claude Code、Cursor、瀏覽器…），**按住右 Cmd 講話、放開**，
 文字就鍵入進去。錄音中反悔就按 **Esc**。
+
+## API 驗證狀態
+
+所有 WhisperKit 介面已逐一對照官方原始碼（`main`）確認簽名相符：
+`WhisperKit(_:)`、`WhisperKitConfig(model:)`、
+`DecodingOptions(task:language:temperature:usePrefillPrompt:promptTokens:)`、
+`transcribe(audioPath:decodeOptions:) -> [TranscriptionResult]`、
+`tokenizer.encode(text:)`、`tokenizer.specialTokens.specialTokenBegin`、`TranscriptionResult.text`。
+（無法在非 macOS 環境實際編譯，但 API 與 Swift/AppKit/AVFoundation 用法均已人工核對。）
 
 ## 之後可再加（升級方向）
 

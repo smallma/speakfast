@@ -17,13 +17,20 @@ final class HotKeyManager {
     private let rightCommandKeyCode: UInt16 = 54   // 右 Command
     private let escapeKeyCode: UInt16 = 53         // Esc
 
+    // 持有 monitor 物件：不保留的話（尤其 local monitor）可能被釋放，熱鍵就失效。
+    private var monitors: [Any] = []
+
     func start() {
-        NSEvent.addGlobalMonitorForEvents(matching: [.flagsChanged, .keyDown]) { [weak self] event in
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: [.flagsChanged, .keyDown], handler: { [weak self] event in
             self?.handle(event)
+        }) {
+            monitors.append(global)
         }
-        NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged, .keyDown]) { [weak self] event in
+        if let local = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged, .keyDown], handler: { [weak self] event in
             self?.handle(event)
             return event
+        }) {
+            monitors.append(local)
         }
     }
 

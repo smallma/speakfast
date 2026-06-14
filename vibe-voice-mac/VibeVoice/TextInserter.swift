@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 
 // 把辨識文字送進最前景的 app。
 //
