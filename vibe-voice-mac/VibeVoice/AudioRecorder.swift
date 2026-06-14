@@ -5,6 +5,7 @@ import AVFoundation
 final class AudioRecorder {
     private var recorder: AVAudioRecorder?
     private var currentURL: URL?
+    private var startedAt: Date?
 
     func start() {
         let url = FileManager.default.temporaryDirectory
@@ -24,16 +25,28 @@ final class AudioRecorder {
             let r = try AVAudioRecorder(url: url, settings: settings)
             r.record()
             recorder = r
+            startedAt = Date()
         } catch {
-            NSLog("AudioRecorder 啟動失敗: \(error)")
+            NSLog("AudioRecorder 啟動失敗")
         }
     }
 
-    // 停止並回傳錄好的檔案；沒錄到東西回 nil
-    @discardableResult
-    func stop() -> URL? {
+    // 停止並回傳（檔案, 錄音長度秒）；沒錄到回 nil
+    func stop() -> (url: URL, duration: Double)? {
         recorder?.stop()
         recorder = nil
-        return currentURL
+        let duration = startedAt.map { Date().timeIntervalSince($0) } ?? 0
+        startedAt = nil
+        guard let url = currentURL else { return nil }
+        return (url, duration)
+    }
+
+    // 取消：停止並刪掉暫存檔（Esc 取消用）
+    func cancel() {
+        recorder?.stop()
+        recorder = nil
+        startedAt = nil
+        if let url = currentURL { try? FileManager.default.removeItem(at: url) }
+        currentURL = nil
     }
 }
