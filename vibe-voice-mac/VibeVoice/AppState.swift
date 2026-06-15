@@ -41,7 +41,7 @@ final class AppState: ObservableObject {
 
     @Published var hotwordCount = 0
 
-    // 太短的錄音視為誤觸（手滑按一下右 Cmd），直接忽略。
+    // 太短的錄音視為誤觸（手滑按一下 Cmd），直接忽略。
     // 0.3s 對「按一下就放」太嚴格 → 一句快話會被整段丟掉。降到 0.2s。
     private let minDurationSec = 0.2
     // 串流預覽的取樣間隔

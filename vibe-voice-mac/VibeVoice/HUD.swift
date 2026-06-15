@@ -4,7 +4,7 @@ import Combine
 
 // 螢幕下方的浮動預覽泡泡：講話時即時顯示辨識中的文字（不碰你的編輯器）。
 // 用 NSPanel + .nonactivatingPanel：顯示時不會搶走前景 app 的焦點，
-// 所以你按住右 Cmd 對著編輯器講話時，焦點仍在編輯器，放開才鍵入。
+// 所以你按住 Command 對著編輯器講話時，焦點仍在編輯器，放開才鍵入。
 @MainActor
 final class HUD {
     static let shared = HUD()

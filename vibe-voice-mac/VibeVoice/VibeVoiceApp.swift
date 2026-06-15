@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 // VibeVoice — M1 MacBook 語音輸入（vibe coding）
-// menu bar app：按住右 Command 說話 → WhisperKit 本地辨識 → 直接鍵入前景 app。
+// menu bar app：按住 Command（左右皆可）說話 → WhisperKit 本地辨識 → 直接鍵入前景 app。
 @main
 struct VibeVoiceApp: App {
     @StateObject private var state = AppState()

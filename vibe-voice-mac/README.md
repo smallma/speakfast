@@ -1,6 +1,6 @@
 # VibeVoice — M1 MacBook 語音輸入（vibe coding）
 
-按住 **右 Command** 說話 → WhisperKit 在本地（M1 ANE/GPU）辨識中英混雜語音 →
+按住 **Command**（左右皆可）說話 → WhisperKit 在本地（M1 ANE/GPU）辨識中英混雜語音 →
 **直接鍵入**最前景的 app（終端機 / 編輯器 / Claude Code）。
 
 完全離線（模型首次下載後），push-to-talk，低延遲，預設不碰剪貼簿。
@@ -8,10 +8,10 @@
 ## 架構（串流：邊講邊出字）
 
 ```
-按住 右Cmd (HotKeyManager, flagsChanged 全域監聽)
+按住 Command (HotKeyManager, flagsChanged 全域監聽，左右皆可)
   → MicStream: WhisperKit AudioProcessor 即時串流 16kHz 樣本
   → 每 0.4s: Transcriber 對累積音訊辨識 → 更新螢幕下方「預覽泡泡 HUD」
-放開 右Cmd        （錄音中按 Esc 可取消）
+放開 Command       （錄音中按 Esc 可取消）
   → Transcriber: 對完整音訊定稿（large-v3-turbo, Core ML, 跑在 ANE）
                  + 熱詞注入 + 幻覺過濾（辨識序列化，永不重疊）
   → TextInserter: CGEvent Unicode 直接鍵入前景 app（不碰剪貼簿）
@@ -26,7 +26,7 @@
 |------|------|
 | `VibeVoiceApp.swift` | MenuBarExtra menu bar app 入口 + 選單 UI |
 | `AppState.swift` | 串接：權限、載模型、串流→預覽→定稿→鍵入 狀態機；設定持久化 |
-| `HotKeyManager.swift` | 右 Cmd push-to-talk + Esc 取消（全域鍵盤監聽）|
+| `HotKeyManager.swift` | Command push-to-talk（左右皆可）+ Esc 取消（全域鍵盤監聽）|
 | `MicStream.swift` | WhisperKit AudioProcessor 即時麥克風串流（16kHz Float 樣本）|
 | `Transcriber.swift` | WhisperKit 封裝 + 熱詞 + 幻覺過濾 + 辨識序列化（@MainActor 任務鏈）|
 | `HUD.swift` | 螢幕下方浮動預覽泡泡（NSPanel，不搶焦點）|
@@ -69,13 +69,13 @@
      （Sandbox 會擋 CGEvent 全域監聽/送鍵，熱鍵與直接鍵入會失效）。
 6. **Build & Run** → 允許麥克風 → 等選單顯示「模型已就緒」（首次下載 large-v3-turbo，約幾百 MB）。
 7. **手動授權**（System Settings → Privacy & Security）：
-   - **Input Monitoring**：勾 VibeVoice（收得到全域右 Cmd / Esc）。
+   - **Input Monitoring**：勾 VibeVoice（收得到全域 Command / Esc）。
    - **Accessibility**：勾 VibeVoice（CGEvent 才送得出按鍵）。
    勾完重啟 app。
 
 ## 使用
 
-對著任何輸入框（終端機的 Claude Code、Cursor、瀏覽器…），**按住右 Cmd 講話、放開**，
+對著任何輸入框（終端機的 Claude Code、Cursor、瀏覽器…），**按住 Command 講話、放開**，
 文字就鍵入進去。錄音中反悔就按 **Esc**。
 
 ## API 驗證狀態
