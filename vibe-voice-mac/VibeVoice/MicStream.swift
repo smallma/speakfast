@@ -8,11 +8,19 @@ final class MicStream {
 
     func start() throws {
         let p = AudioProcessor()
+        // startRecordingLive 真正啟動 AVAudioEngine 並開始往 audioSamples 累積。
+        // callback 傳 nil：我們不需要逐塊回呼，只在 stop 時讀整段 audioSamples 快照。
         try p.startRecordingLive(inputDeviceID: nil, callback: nil)
         processor = p
+        NSLog("[VibeVoice][ASR] mic start: startRecordingLive returned, initialSamples=\(p.audioSamples.count)")
     }
 
     func stop() {
+        let count = processor?.audioSamples.count ?? 0
+        NSLog("[VibeVoice][ASR] mic stop: capturedSamples=\(count) (durationSec=\(String(format: "%.2f", Double(count) / 16000.0)))")
+        if count == 0 {
+            NSLog("[VibeVoice][ASR] WARNING: 0 samples captured — mic permission denied or capture never started")
+        }
         processor?.stopRecording()
     }
 

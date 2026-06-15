@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import ApplicationServices
 
 // 把辨識文字送進最前景的 app。
 //
@@ -18,6 +19,9 @@ enum InsertMode {
 
 enum TextInserter {
     static func insert(_ text: String, mode: InsertMode, pressEnter: Bool) {
+        // 只記長度，絕不記內容（可能是密碼 / 私訊）。
+        let modeName = (mode == .directType) ? "directType" : "clipboardPaste"
+        NSLog("[VibeVoice][Insert] insert called · len=\(text.count) mode=\(modeName) pressEnter=\(pressEnter) AXTrusted=\(AXIsProcessTrusted())")
         // 鍵盤注入要序列化、且有微小間隔，放背景跑避免卡住 UI / main runloop。
         DispatchQueue.global(qos: .userInitiated).async {
             switch mode {

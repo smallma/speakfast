@@ -16,13 +16,34 @@ final class Transcriber {
     private var pipe: WhisperKit?
     private var tail: Task<String, Never> = Task { "" }
 
+    // 最近一次 load() 的錯誤訊息（成功則為 nil）。UI 可讀取顯示。
+    private(set) var lastError: String?
+
+    // 是否把熱詞清單注入成 prompt token。熱詞都是英文，注入英文 prompt 可能
+    // 把自動語言偵測往英文拉、進而壓抑中文輸出，因此預設關閉以保護中文辨識。
+    var injectHotwordPrompt: Bool = false
+
     func load() async {
+        // 先試主模型，失敗再退回較小、較穩、下載快的 "base"，讓 App 至少能動。
+        if await tryLoad(model: "large-v3-turbo") { return }
+        NSLog("[VibeVoice][ASR] large-v3-turbo load failed, falling back to base")
+        _ = await tryLoad(model: "base")
+    }
+
+    // 嘗試載入指定模型；成功回 true 並清空 lastError，失敗回 false 並記錄錯誤。
+    private func tryLoad(model: String) async -> Bool {
         do {
-            // 模型名會做模糊比對，解析到 turbo 變體。想更省記憶體可改 "base" 先測流程。
-            let config = WhisperKitConfig(model: "large-v3-turbo")
+            let config = WhisperKitConfig(model: model)
             pipe = try await WhisperKit(config)
+            lastError = nil
+            NSLog("[VibeVoice][ASR] load OK model=\(model)")
+            return true
         } catch {
-            NSLog("WhisperKit 載入失敗") // 不印 error 細節，保守一點
+            let msg = "\(error)"
+            lastError = msg
+            // 印出確切錯誤（這是載入錯誤，不含使用者口述內容，可安全記錄）。
+            NSLog("[VibeVoice][ASR] load FAILED model=\(model) error=\(msg)")
+            return false
         }
     }
 
@@ -43,20 +64,36 @@ final class Transcriber {
     }
 
     private func run(samples: [Float], durationSec: Double, filterHallucinations: Bool) async -> String {
-        guard let pipe, !samples.isEmpty else { return "" }
+        guard let pipe else {
+            NSLog("[VibeVoice][ASR] transcribe skipped: pipe is nil (model not loaded)")
+            return ""
+        }
+        guard !samples.isEmpty else {
+            NSLog("[VibeVoice][ASR] transcribe skipped: 0 input samples")
+            return ""
+        }
+        NSLog("[VibeVoice][ASR] transcribe start inputSamples=\(samples.count) durationSec=\(String(format: "%.2f", durationSec))")
         do {
             let options = buildOptions(pipe: pipe)
             let results = try await pipe.transcribe(audioArray: samples, decodeOptions: options)
             let text = results.map { $0.text }.joined()
                 .trimmingCharacters(in: .whitespacesAndNewlines)
 
-            if filterHallucinations, durationSec < 1.5 {
-                let norm = text.lowercased().trimmingCharacters(in: .punctuationCharacters)
-                if Self.hallucinations.contains(norm) { return "" }
+            // 只記錄輸出長度，不記錄實際辨識內容（隱私）。
+            NSLog("[VibeVoice][ASR] transcribe done outputLength=\(text.count)")
+
+            // 幻覺過濾：只在「極短音(<1.0s)」且「整段文字精確等於」已知幻覺時才丟。
+            // 用精確比對（不再做 lowercased/去標點的模糊正規化），避免誤刪真實的短中文。
+            if filterHallucinations, durationSec < 1.0 {
+                if Self.hallucinations.contains(text) {
+                    NSLog("[VibeVoice][ASR] dropped exact hallucination match (len=\(text.count))")
+                    return ""
+                }
             }
             return text
         } catch {
-            NSLog("辨識失敗")
+            // 載入/推論錯誤不含使用者內容，可安全記錄確切錯誤。
+            NSLog("[VibeVoice][ASR] transcribe error=\(error)")
             return ""
         }
     }
@@ -65,7 +102,9 @@ final class Transcriber {
     // 當成解碼前置上下文，提升 useEffect / pnpm 這類技術詞的辨識。
     private func buildOptions(pipe: WhisperKit) -> DecodingOptions {
         var promptTokens: [Int] = []
-        if let tokenizer = pipe.tokenizer {
+        // 預設不注入英文熱詞 prompt，以免把語言偵測拉向英文、壓抑中文輸出。
+        // 需要技術詞強化時可由呼叫端開啟 injectHotwordPrompt。
+        if injectHotwordPrompt, let tokenizer = pipe.tokenizer {
             let begin = tokenizer.specialTokens.specialTokenBegin
             promptTokens = tokenizer.encode(text: " " + Vocabulary.promptText())
                 .filter { $0 < begin }

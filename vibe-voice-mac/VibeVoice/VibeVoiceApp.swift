@@ -31,12 +31,28 @@ struct MenuView: View {
 
         Divider()
 
+        // 自我診斷狀態列
         Text(state.modelReady
-             ? "模型已就緒 · 熱詞 \(state.hotwordCount) 個"
-             : "模型載入中…")
+             ? "模型：已就緒 · 熱詞 \(state.hotwordCount) 個"
+             : "模型：載入中…（未就緒時錄音會被略過）")
             .font(.caption)
+        Text(state.accessibilityTrusted
+             ? "輔助使用權限：已授權"
+             : "輔助使用權限：未授權（文字無法鍵入！）")
+            .font(.caption)
+        Text("用法：按住 Command 說話，說完再放開")
+            .font(.caption2)
         Text("熱詞檔：~/.vibevoice/hotwords.txt")
             .font(.caption2)
+
+        if !state.accessibilityTrusted {
+            Button("開啟 系統設定 → 輔助使用") {
+                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+        }
+        Button("重新檢查權限") { state.refreshAccessibilityStatus() }
 
         Divider()
 
